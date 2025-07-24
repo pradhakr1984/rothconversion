@@ -11,7 +11,7 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
   let taxableBalance = inputs.taxableBalance || 0;
   let cumulativeTaxPaid = 0;
   
-  // Track no-conversion scenario separately
+  // Track no-conversion scenario - same starting point but no conversions
   let noConversionTraditional = inputs.traditionalBalance;
   let noConversionRoth = inputs.rothBalance;
   let noConversionTaxable = inputs.taxableBalance || 0;
@@ -78,8 +78,7 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
       }
     }
     
-    // Calculate no-conversion scenario
-    // Apply same RMD logic to no-conversion scenario
+    // Calculate no-conversion scenario - same logic but no conversions
     const noConversionRmdAmount = isRetired && age1 >= 72 ? getRmd(noConversionTraditional, age1) : 0;
     const noConversionRmdTax = noConversionRmdAmount > 0 ? calcTotalTax(noConversionRmdAmount, brackets, inputs.enableStateTax ? inputs.stateTaxRate : 0) : 0;
     
@@ -100,7 +99,7 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
     const totalAfterTaxWealth = traditionalBalance + rothBalance + Math.max(0, taxableBalance);
     const noConversionWealth = noConversionTraditional + noConversionRoth + Math.max(0, noConversionTaxable);
     
-    // Check for break-even
+    // Check for break-even - when conversion strategy becomes beneficial
     const breakEven = totalAfterTaxWealth > noConversionWealth;
     
     cumulativeTaxPaid += conversionTax + rmdTax;
@@ -142,6 +141,60 @@ export function calculateTotalTaxSavings(results: SimulationResult[]): number {
   if (results.length === 0) return 0;
   const lastResult = results[results.length - 1];
   return lastResult.conversionWealth - lastResult.noConversionWealth;
+}
+
+// New function to analyze if conversion makes sense for bracket optimization
+export function analyzeBracketOptimization(
+  currentIncome: number,
+  traditionalBalance: number,
+  targetBracket: number,
+  filingStatus: 'single' | 'mfj'
+): { shouldConvert: boolean; recommendedAmount: number; reasoning: string } {
+  const brackets = getBrackets(filingStatus);
+  const currentBracket = calcMarginalTaxRate(currentIncome, brackets);
+  
+  // If we're already at or below target bracket, convert to fill next bracket
+  if (currentBracket <= targetBracket) {
+    for (const bracket of brackets) {
+      if (bracket.rate > currentBracket && bracket.cap) {
+        const roomInBracket = bracket.cap - currentIncome;
+        const recommendedAmount = Math.min(roomInBracket, traditionalBalance);
+        return {
+          shouldConvert: recommendedAmount > 0,
+          recommendedAmount,
+          reasoning: `Convert up to ${bracket.label} bracket (${bracket.rate * 100}%)`
+        };
+      }
+    }
+    // If at top bracket, convert a reasonable amount
+    const recommendedAmount = Math.min(traditionalBalance * 0.1, 50000);
+    return {
+      shouldConvert: recommendedAmount > 0,
+      recommendedAmount,
+      reasoning: `Convert ${recommendedAmount.toLocaleString()} at current rate (${currentBracket * 100}%)`
+    };
+  }
+  
+  // If above target bracket, convert to get down to target bracket
+  let conversionAmount = 0;
+  let testIncome = currentIncome;
+  
+  for (const bracket of brackets) {
+    if (bracket.rate <= targetBracket && bracket.cap) {
+      const roomInBracket = bracket.cap - testIncome;
+      if (roomInBracket > 0) {
+        conversionAmount += roomInBracket;
+        testIncome = bracket.cap;
+      }
+    }
+  }
+  
+  const finalAmount = Math.min(conversionAmount, traditionalBalance);
+  return {
+    shouldConvert: finalAmount > 0,
+    recommendedAmount: finalAmount,
+    reasoning: `Convert to reach ${targetBracket * 100}% bracket`
+  };
 }
 
 export function analyzeTaxBrackets(

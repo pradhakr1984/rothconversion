@@ -2,7 +2,7 @@
 
 import { SimulationResult } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui';
-import { findBreakEvenYear, calculateTotalTaxSavings } from '../lib/simulation';
+import { findBreakEvenYear, calculateTotalTaxSavings, analyzeBracketOptimization } from '../lib/simulation';
 
 interface ResultsProps {
   results: SimulationResult[];
@@ -17,6 +17,11 @@ export function Results({ results, inputs }: ResultsProps) {
   const breakEvenYear = findBreakEvenYear(results);
   const totalTaxSavings = calculateTotalTaxSavings(results);
   const lastResult = results[results.length - 1];
+
+  // Analyze bracket optimization if that strategy is selected
+  const bracketAnalysis = inputs.conversionStrategy === 'bracket-optimization' 
+    ? analyzeBracketOptimization(inputs.annualIncome, inputs.traditionalBalance, inputs.targetTaxBracket, inputs.filingStatus)
+    : null;
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -77,6 +82,36 @@ export function Results({ results, inputs }: ResultsProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Bracket Optimization Analysis */}
+      {bracketAnalysis && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Bracket Optimization Analysis</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className={`p-4 rounded-lg ${bracketAnalysis.shouldConvert ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
+                <h4 className="font-semibold mb-2">
+                  {bracketAnalysis.shouldConvert ? '✅ Convert Recommended' : '⚠️ Conversion Not Recommended'}
+                </h4>
+                <p className="text-sm text-gray-700 mb-2">{bracketAnalysis.reasoning}</p>
+                {bracketAnalysis.shouldConvert && (
+                  <p className="text-sm font-medium">
+                    Recommended amount: {formatCurrency(bracketAnalysis.recommendedAmount)}
+                  </p>
+                )}
+              </div>
+              
+              <div className="text-sm text-gray-600">
+                <p><strong>Current income:</strong> {formatCurrency(inputs.annualIncome)}</p>
+                <p><strong>Target bracket:</strong> {formatPercentage(inputs.targetTaxBracket * 100)}</p>
+                <p><strong>Traditional IRA balance:</strong> {formatCurrency(inputs.traditionalBalance)}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Conversion Details */}
       {results.length > 0 && (
