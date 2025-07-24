@@ -10,7 +10,11 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
   let rothBalance = inputs.rothBalance;
   let taxableBalance = inputs.taxableBalance || 0;
   let cumulativeTaxPaid = 0;
-  let noConversionWealth = inputs.traditionalBalance + inputs.rothBalance + (inputs.taxableBalance || 0);
+  
+  // Track no-conversion scenario separately
+  let noConversionTraditional = inputs.traditionalBalance;
+  let noConversionRoth = inputs.rothBalance;
+  let noConversionTaxable = inputs.taxableBalance || 0;
   
   // Track if one-time conversion has been done
   let oneTimeConversionDone = false;
@@ -74,13 +78,27 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
       }
     }
     
-    // Calculate no-conversion scenario for break-even analysis
+    // Calculate no-conversion scenario
+    // Apply same RMD logic to no-conversion scenario
+    const noConversionRmdAmount = isRetired && age1 >= 72 ? getRmd(noConversionTraditional, age1) : 0;
+    const noConversionRmdTax = noConversionRmdAmount > 0 ? calcTotalTax(noConversionRmdAmount, brackets, inputs.enableStateTax ? inputs.stateTaxRate : 0) : 0;
+    
+    noConversionTraditional -= noConversionRmdAmount;
+    if (inputs.taxableBalance !== undefined) {
+      noConversionTaxable -= noConversionRmdTax;
+    }
+    
     if (inputs.expectedReturn !== undefined) {
-      noConversionWealth *= (1 + inputs.expectedReturn);
+      noConversionTraditional *= (1 + inputs.expectedReturn);
+      noConversionRoth *= (1 + inputs.expectedReturn);
+      if (inputs.taxableYield !== undefined && inputs.taxableBalance !== undefined) {
+        noConversionTaxable *= (1 + inputs.taxableYield);
+      }
     }
     
     // Calculate total after-tax wealth
     const totalAfterTaxWealth = traditionalBalance + rothBalance + Math.max(0, taxableBalance);
+    const noConversionWealth = noConversionTraditional + noConversionRoth + Math.max(0, noConversionTaxable);
     
     // Check for break-even
     const breakEven = totalAfterTaxWealth > noConversionWealth;
