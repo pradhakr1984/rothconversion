@@ -1,6 +1,7 @@
 'use client';
 
 import { analyzeTaxBrackets } from '../lib/simulation';
+import { getStandardDeduction } from '../lib/taxEngine';
 import { Card, CardContent, CardHeader, CardTitle } from './ui';
 
 interface BracketAnalysisProps {
@@ -126,7 +127,7 @@ export function BracketAnalysis({ currentIncome, traditionalBalance, filingStatu
                   Convert up to the next bracket threshold, accepting a higher tax rate for more Roth conversion.
                 </p>
                 <p className="font-bold text-2xl text-blue-600">
-                  {formatCurrency(bracketAnalysis[1]?.maxIncome || 0 - currentIncome)}
+                  {formatCurrency(Math.max(0, (bracketAnalysis.find(b => b.rate > bracketAnalysis[0]?.rate)?.maxIncome || 0) - (currentIncome - getStandardDeduction(filingStatus))))}
                 </p>
                 <p className="text-sm text-blue-600 mt-2">
                   Maximum conversion amount
@@ -144,7 +145,7 @@ export function BracketAnalysis({ currentIncome, traditionalBalance, filingStatu
             <ul className="text-lg text-amber-700 space-y-4">
               <li className="flex items-start">
                 <span className="text-amber-500 mr-3 mt-2">•</span>
-                <span>Converting more than {formatCurrency(bracketAnalysis[0]?.roomInBracket || 0)} will push you into the {formatPercentage(bracketAnalysis[1]?.rate || 0)} bracket</span>
+                <span>Converting more than {formatCurrency(bracketAnalysis[0]?.roomInBracket || 0)} will push you into the {formatPercentage(bracketAnalysis[1]?.rate || 0)} bracket (next bracket up)</span>
               </li>
               <li className="flex items-start">
                 <span className="text-amber-500 mr-3 mt-2">•</span>

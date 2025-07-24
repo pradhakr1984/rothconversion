@@ -5,7 +5,6 @@ import { UserInputs, SimulationResult } from './types';
 import { runSimulation } from './lib/simulation';
 import { Inputs } from './components/Inputs';
 import { Results } from './components/Results';
-import { TaxTable } from './components/TaxTable';
 import { BracketAnalysis } from './components/BracketAnalysis';
 
 export default function Home() {
@@ -118,11 +117,6 @@ export default function Home() {
                 traditionalBalance={inputs.traditionalBalance}
                 filingStatus={inputs.filingStatus}
               />
-            </div>
-
-            {/* Tax Table */}
-            <div>
-              <TaxTable filingStatus={filingStatus} />
             </div>
           </div>
         )}
@@ -250,7 +244,6 @@ export default function Home() {
         {/* Footer */}
         <footer className="text-center py-8 border-t border-gray-200/50">
           <p className="text-gray-500 text-sm">
-            Built with Next.js, TypeScript, and Tailwind CSS. 
             Tax calculations based on 2025 federal brackets and NY state tax (6.85%).
           </p>
         </footer>
