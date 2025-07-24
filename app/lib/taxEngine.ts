@@ -74,16 +74,16 @@ export function getOptimalConversionAmount(
 ): number {
   const currentBracket = calcMarginalTaxRate(currentIncome, brackets);
   
-  // If we're already at or below the target bracket, convert up to the next bracket
+  // If we're already at or below the target bracket, convert to fill the target bracket
   if (currentBracket <= targetBracket) {
-    // Find the next bracket threshold
+    // Find the target bracket threshold
     for (const bracket of brackets) {
-      if (bracket.rate > currentBracket && bracket.cap) {
+      if (bracket.rate === targetBracket && bracket.cap) {
         const roomInBracket = bracket.cap - currentIncome;
         return Math.min(roomInBracket, traditionalBalance);
       }
     }
-    // If we're at the top bracket, convert a reasonable amount
+    // If target bracket is not found or has no cap, convert a reasonable amount
     return Math.min(traditionalBalance * 0.1, 50000); // 10% or $50k, whichever is less
   }
   

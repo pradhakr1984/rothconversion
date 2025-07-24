@@ -5,31 +5,25 @@ export interface TaxBracket {
 }
 
 export interface UserInputs {
-  // Personal Info
   age1: number;
   age2: number;
   filingStatus: 'single' | 'mfj';
   retirementAge: number;
-  
-  // Account Balances
   traditionalBalance: number;
   rothBalance: number;
-  taxableBalance?: number; // Optional - only needed if you want to track taxable account
-  
-  // Income & Conversions
+  taxableBalance?: number;
   annualIncome: number;
+  // Multi-year income support
+  yearlyIncomes: number[]; // Array of 10 years of income
+  retirementIncome: number; // Income after retirement
   conversionStrategy: 'one-time' | 'annual' | 'bracket-optimization';
   annualConversion: number;
   conversionPercentage: number;
-  targetTaxBracket: number; // For bracket optimization
-  
-  // Investment Assumptions (optional for basic analysis)
-  expectedReturn?: number;
-  taxableYield?: number;
+  targetTaxBracket: number;
+  expectedReturn?: number | string; // Can be string from form, transformed to number
+  taxableYield?: number | string; // Can be string from form, transformed to number
   simulationYears: number;
-  
-  // Tax Settings
-  stateTaxRate: number;
+  stateTaxRate: number; // Stored as percentage (e.g., 6.85 for 6.85%)
   enableStateTax: boolean;
 }
 
@@ -37,32 +31,21 @@ export interface SimulationResult {
   year: number;
   age1: number;
   age2: number;
-  
-  // Balances
   traditionalBalance: number;
   rothBalance: number;
   taxableBalance?: number;
-  
-  // Conversion Details
   conversionAmount: number;
   conversionTax: number;
   marginalTaxRate: number;
-  
-  // RMD Analysis
   rmdAmount: number;
   rmdTax: number;
-  
-  // Cumulative Totals
   cumulativeTaxPaid: number;
   totalAfterTaxWealth: number;
-  
-  // Break-even analysis
   noConversionWealth: number;
   conversionWealth: number;
   breakEven: boolean;
-  
-  // Retirement status
   isRetired: boolean;
+  annualIncome: number; // Add current year's income
 }
 
 export interface MonteCarloResult {

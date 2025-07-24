@@ -20,7 +20,7 @@ export function Results({ results, inputs }: ResultsProps) {
 
   // Analyze bracket optimization if that strategy is selected
   const bracketAnalysis = inputs.conversionStrategy === 'bracket-optimization' 
-    ? analyzeBracketOptimization(inputs.annualIncome, inputs.traditionalBalance, inputs.targetTaxBracket, inputs.filingStatus)
+    ? analyzeBracketOptimization(inputs.annualIncome, inputs.traditionalBalance, inputs.targetTaxBracket, inputs.filingStatus, inputs.yearlyIncomes)
     : null;
 
   const formatCurrency = (value: number) => {
@@ -36,10 +36,13 @@ export function Results({ results, inputs }: ResultsProps) {
     return `${value.toFixed(1)}%`;
   };
 
+  // Get the conversion amount for display
+  const conversionAmount = results[0]?.conversionAmount || 0;
+
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Break-Even Year</CardTitle>
@@ -50,8 +53,8 @@ export function Results({ results, inputs }: ResultsProps) {
             </p>
             <p className="text-sm text-gray-500 mt-1">
               {breakEvenYear 
-                ? `When your conversion strategy becomes beneficial`
-                : `Your conversion strategy may not be beneficial within ${inputs.simulationYears} years`
+                ? `When converting ${formatCurrency(conversionAmount)} becomes beneficial`
+                : `Converting ${formatCurrency(conversionAmount)} may not be beneficial within ${inputs.simulationYears} years`
               }
             </p>
           </CardContent>
@@ -67,23 +70,9 @@ export function Results({ results, inputs }: ResultsProps) {
             </p>
             <p className="text-sm text-gray-500 mt-1">
               {totalTaxSavings > 0 
-                ? `Better than no conversion strategy`
-                : `Worse than no conversion strategy`
+                ? `Better than not converting ${formatCurrency(conversionAmount)}`
+                : `Worse than not converting ${formatCurrency(conversionAmount)}`
               }
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Final Portfolio Value</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-green-600">
-              {formatCurrency(lastResult.totalAfterTaxWealth)}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              Total after-tax wealth at year {lastResult.year}
             </p>
           </CardContent>
         </Card>
@@ -97,20 +86,33 @@ export function Results({ results, inputs }: ResultsProps) {
         <CardContent>
           <div className="space-y-4">
             <div>
+              <h4 className="font-semibold mb-2">What This Analysis Compares:</h4>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>Scenario A:</strong> Convert {formatCurrency(conversionAmount)} now and pay taxes upfront
+                </p>
+                <p className="text-sm text-blue-800 mt-1">
+                  <strong>Scenario B:</strong> Don't convert {formatCurrency(conversionAmount)} and pay taxes later on RMDs
+                </p>
+              </div>
+            </div>
+            
+            <div>
               <h4 className="font-semibold mb-2">What These Numbers Mean:</h4>
               <ul className="text-sm text-gray-600 space-y-2">
-                <li><strong>Break-Even Year:</strong> The year when your conversion strategy (e.g., converting $200k) becomes more beneficial than not converting at all. If "Not reached", it means the conversion strategy doesn't pay off within your simulation period.</li>
-                <li><strong>Strategy Comparison:</strong> The difference between your conversion strategy's final wealth vs. a no-conversion strategy. Positive = conversion strategy wins, Negative = no-conversion strategy wins.</li>
-                <li><strong>Final Portfolio Value:</strong> Your total after-tax wealth at the end of the simulation period using your chosen conversion strategy.</li>
+                <li><strong>Break-Even Year:</strong> The year when Scenario A (convert now) becomes more beneficial than Scenario B (don't convert). If "Not reached", it means paying taxes upfront on {formatCurrency(conversionAmount)} doesn't pay off within your simulation period.</li>
+                <li><strong>Strategy Comparison:</strong> The final difference between Scenario A and Scenario B. Positive = converting now wins, Negative = not converting wins.</li>
               </ul>
             </div>
             
             <div>
-              <h4 className="font-semibold mb-2">Key Insight:</h4>
-              <p className="text-sm text-gray-600">
-                This analysis compares your specific conversion strategy (e.g., converting $200k this year) against the alternative of not converting that amount. 
-                It's not comparing "convert everything vs. convert nothing" - it's comparing your chosen strategy against the status quo.
-              </p>
+              <h4 className="font-semibold mb-2">Key Factors:</h4>
+              <ul className="text-sm text-gray-600 space-y-1">
+                <li>• <strong>Tax Rate:</strong> Paying {formatPercentage(results[0]?.marginalTaxRate * 100 || 0)} now vs. potentially higher rates later</li>
+                <li>• <strong>Growth:</strong> Tax-free growth in Roth vs. taxable growth in Traditional</li>
+                <li>• <strong>RMDs:</strong> Required distributions starting at age 72 (if retired)</li>
+                <li>• <strong>Time Horizon:</strong> {inputs.simulationYears} years of compound growth</li>
+              </ul>
             </div>
           </div>
         </CardContent>
@@ -135,6 +137,38 @@ export function Results({ results, inputs }: ResultsProps) {
                   </p>
                 )}
               </div>
+              
+              {/* Yearly Recommendations */}
+              {bracketAnalysis.yearlyRecommendations && bracketAnalysis.yearlyRecommendations.length > 0 && (
+                <div>
+                  <h4 className="font-semibold mb-3">Year-by-Year Conversion Plan</h4>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Year</th>
+                          <th className="text-right py-2">Income</th>
+                          <th className="text-right py-2">Recommended Conversion</th>
+                          <th className="text-right py-2">Tax Rate</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bracketAnalysis.yearlyRecommendations.map((rec, index) => (
+                          <tr key={index} className="border-b hover:bg-gray-50">
+                            <td className="py-2">{rec.year}</td>
+                            <td className="text-right py-2">{formatCurrency(rec.income)}</td>
+                            <td className="text-right py-2 font-semibold">{formatCurrency(rec.recommendedAmount)}</td>
+                            <td className="text-right py-2">{formatPercentage(inputs.targetTaxBracket * 100)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-2">
+                    This plan optimizes conversions during your lower-income years to fill the {formatPercentage(inputs.targetTaxBracket * 100)} tax bracket.
+                  </p>
+                </div>
+              )}
               
               <div className="text-sm text-gray-600">
                 <p><strong>Current income:</strong> {formatCurrency(inputs.annualIncome)}</p>
@@ -393,10 +427,10 @@ export function Results({ results, inputs }: ResultsProps) {
                   <li>• Break-even occurs in year {breakEvenYear}</li>
                 )}
                 {totalTaxSavings > 0 && (
-                  <li>• Your strategy is {formatCurrency(totalTaxSavings)} better than no conversion</li>
+                  <li>• Converting {formatCurrency(conversionAmount)} now is {formatCurrency(totalTaxSavings)} better than not converting</li>
                 )}
                 {totalTaxSavings < 0 && (
-                  <li>• Your strategy is {formatCurrency(Math.abs(totalTaxSavings))} worse than no conversion</li>
+                  <li>• Converting {formatCurrency(conversionAmount)} now is {formatCurrency(Math.abs(totalTaxSavings))} worse than not converting</li>
                 )}
                 <li>• Retirement age: {inputs.retirementAge}</li>
                 <li>• RMDs start at age 72 (if retired)</li>

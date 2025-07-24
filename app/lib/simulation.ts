@@ -24,6 +24,19 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
     const age2 = inputs.age2 + year - 1;
     const isRetired = age1 >= inputs.retirementAge;
     
+    // Get income for this year
+    let currentYearIncome: number;
+    if (year <= 10) {
+      // Use specific yearly income for first 10 years
+      currentYearIncome = inputs.yearlyIncomes[year - 1] || inputs.annualIncome;
+    } else if (isRetired) {
+      // Use retirement income after retirement age
+      currentYearIncome = inputs.retirementIncome;
+    } else {
+      // Use last working year income for remaining working years
+      currentYearIncome = inputs.yearlyIncomes[9] || inputs.annualIncome;
+    }
+    
     // Determine conversion amount based on strategy
     let conversionAmount = 0;
     
@@ -39,7 +52,7 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
       // Only convert if not retired and we have room in target bracket
       if (!isRetired) {
         conversionAmount = getOptimalConversionAmount(
-          inputs.annualIncome,
+          currentYearIncome,
           traditionalBalance,
           brackets,
           inputs.targetTaxBracket
@@ -48,7 +61,7 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
     }
     
     // Calculate tax on conversion
-    const taxableIncome = inputs.annualIncome + conversionAmount;
+    const taxableIncome = currentYearIncome + conversionAmount;
     const marginalTaxRate = calcMarginalTaxRate(taxableIncome, brackets);
     const conversionTax = calcTotalTax(conversionAmount, brackets, inputs.enableStateTax ? inputs.stateTaxRate : 0);
     
@@ -70,11 +83,14 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
     }
     
     // Apply investment growth (only if growth assumptions provided)
-    if (inputs.expectedReturn !== undefined) {
-      traditionalBalance *= (1 + inputs.expectedReturn);
-      rothBalance *= (1 + inputs.expectedReturn);
-      if (inputs.taxableYield !== undefined && inputs.taxableBalance !== undefined) {
-        taxableBalance *= (1 + inputs.taxableYield);
+    const expectedReturn = typeof inputs.expectedReturn === 'string' ? parseFloat(inputs.expectedReturn) / 100 : inputs.expectedReturn;
+    const taxableYield = typeof inputs.taxableYield === 'string' ? parseFloat(inputs.taxableYield) / 100 : inputs.taxableYield;
+    
+    if (expectedReturn !== undefined && expectedReturn > 0) {
+      traditionalBalance *= (1 + expectedReturn);
+      rothBalance *= (1 + expectedReturn);
+      if (taxableYield !== undefined && taxableYield > 0 && inputs.taxableBalance !== undefined) {
+        taxableBalance *= (1 + taxableYield);
       }
     }
     
@@ -87,11 +103,11 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
       noConversionTaxable -= noConversionRmdTax;
     }
     
-    if (inputs.expectedReturn !== undefined) {
-      noConversionTraditional *= (1 + inputs.expectedReturn);
-      noConversionRoth *= (1 + inputs.expectedReturn);
-      if (inputs.taxableYield !== undefined && inputs.taxableBalance !== undefined) {
-        noConversionTaxable *= (1 + inputs.taxableYield);
+    if (expectedReturn !== undefined && expectedReturn > 0) {
+      noConversionTraditional *= (1 + expectedReturn);
+      noConversionRoth *= (1 + expectedReturn);
+      if (taxableYield !== undefined && taxableYield > 0 && inputs.taxableBalance !== undefined) {
+        noConversionTaxable *= (1 + taxableYield);
       }
     }
     
@@ -121,7 +137,8 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
       noConversionWealth,
       conversionWealth: totalAfterTaxWealth,
       breakEven,
-      isRetired
+      isRetired,
+      annualIncome: currentYearIncome
     });
   }
   
@@ -148,11 +165,54 @@ export function analyzeBracketOptimization(
   currentIncome: number,
   traditionalBalance: number,
   targetBracket: number,
-  filingStatus: 'single' | 'mfj'
-): { shouldConvert: boolean; recommendedAmount: number; reasoning: string } {
+  filingStatus: 'single' | 'mfj',
+  yearlyIncomes?: number[]
+): { shouldConvert: boolean; recommendedAmount: number; reasoning: string; yearlyRecommendations?: Array<{year: number, income: number, recommendedAmount: number}> } {
   const brackets = getBrackets(filingStatus);
   const currentBracket = calcMarginalTaxRate(currentIncome, brackets);
   
+  // If we have yearly incomes, analyze the full scenario
+  if (yearlyIncomes && yearlyIncomes.length > 0) {
+    const yearlyRecommendations = [];
+    let totalRecommended = 0;
+    
+    for (let year = 0; year < Math.min(10, yearlyIncomes.length); year++) {
+      const yearIncome = yearlyIncomes[year];
+      const yearBracket = calcMarginalTaxRate(yearIncome, brackets);
+      
+      // Only recommend conversions if we're at or below target bracket
+      if (yearBracket <= targetBracket) {
+        // Find room in the target bracket
+        for (const bracket of brackets) {
+          if (bracket.rate === targetBracket && bracket.cap) {
+            const roomInBracket = bracket.cap - yearIncome;
+            const recommendedAmount = Math.min(roomInBracket, traditionalBalance - totalRecommended);
+            
+            if (recommendedAmount > 0) {
+              yearlyRecommendations.push({
+                year: year + 1,
+                income: yearIncome,
+                recommendedAmount
+              });
+              totalRecommended += recommendedAmount;
+            }
+            break;
+          }
+        }
+      }
+    }
+    
+    if (totalRecommended > 0) {
+      return {
+        shouldConvert: true,
+        recommendedAmount: totalRecommended,
+        reasoning: `Convert ${totalRecommended.toLocaleString()} over ${yearlyRecommendations.length} years to fill ${targetBracket * 100}% bracket`,
+        yearlyRecommendations
+      };
+    }
+  }
+  
+  // Fallback to current year analysis
   // If we're already at or below target bracket, convert to fill next bracket
   if (currentBracket <= targetBracket) {
     for (const bracket of brackets) {

@@ -16,14 +16,24 @@ const inputSchema = z.object({
   rothBalance: z.number().min(0),
   taxableBalance: z.number().min(0).optional(),
   annualIncome: z.number().min(0),
+  yearlyIncomes: z.array(z.number().min(0)).length(10),
+  retirementIncome: z.number().min(0),
   conversionStrategy: z.enum(['one-time', 'annual', 'bracket-optimization']),
   annualConversion: z.number().min(0),
   conversionPercentage: z.number().min(0).max(100),
   targetTaxBracket: z.number().min(0.10).max(0.37),
-  expectedReturn: z.number().min(0).max(0.2).optional(),
-  taxableYield: z.number().min(0).max(0.1).optional(),
+  expectedReturn: z.string().optional().transform(val => {
+    if (val === '' || val === undefined || val === null) return undefined;
+    const num = parseFloat(val);
+    return isNaN(num) ? undefined : num;
+  }),
+  taxableYield: z.string().optional().transform(val => {
+    if (val === '' || val === undefined || val === null) return undefined;
+    const num = parseFloat(val);
+    return isNaN(num) ? undefined : num;
+  }),
   simulationYears: z.number().min(1).max(50),
-  stateTaxRate: z.number().min(0).max(0.15),
+  stateTaxRate: z.number().min(0).max(15), // Now represents percentage (0-15%)
   enableStateTax: z.boolean(),
 });
 
@@ -49,14 +59,16 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
       rothBalance: 0, // Updated to $0
       taxableBalance: undefined,
       annualIncome: 150000,
+      yearlyIncomes: Array(10).fill(150000), // Default 10 years at $150k
+      retirementIncome: 80000, // Default retirement income
       conversionStrategy: 'one-time',
       annualConversion: 200000, // Updated to $200k
       conversionPercentage: 10,
       targetTaxBracket: 0.22,
-      expectedReturn: undefined,
-      taxableYield: undefined,
+      expectedReturn: '',
+      taxableYield: '',
       simulationYears: 30,
-      stateTaxRate: NY_STATE_TAX_RATE,
+      stateTaxRate: NY_STATE_TAX_RATE * 100, // Convert to percentage for display
       enableStateTax: true,
       ...defaultValues,
     },
@@ -78,13 +90,28 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
     return `${value.toFixed(1)}%`;
   };
 
+  const handleFormSubmit = (data: UserInputs) => {
+    // Transform string inputs to numbers for simulation
+    const transformedData = {
+      ...data,
+      expectedReturn: typeof data.expectedReturn === 'string' && data.expectedReturn.trim() !== '' 
+        ? parseFloat(data.expectedReturn) / 100 
+        : undefined,
+      taxableYield: typeof data.taxableYield === 'string' && data.taxableYield.trim() !== '' 
+        ? parseFloat(data.taxableYield) / 100 
+        : undefined,
+      stateTaxRate: data.stateTaxRate / 100, // Convert percentage to decimal
+    };
+    onSubmit(transformedData);
+  };
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Roth Conversion Calculator</CardTitle>
       </CardHeader>
       <CardContent>
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6">
           {/* Personal Information */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Personal Information</h3>
@@ -179,11 +206,30 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
             </div>
           </div>
 
-          {/* Income & Conversions */}
+          {/* Multi-Year Income */}
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold">Income & Conversions</h3>
+            <h3 className="text-lg font-semibold">Income Projection</h3>
+            
+            {/* Helpful explanation */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-800 mb-2">💡 Bracket Optimization with Changing Income</h4>
+              <p className="text-sm text-blue-700 mb-2">
+                When you select "Bracket optimization" strategy, the calculator will:
+              </p>
+              <ul className="text-sm text-blue-700 space-y-1 list-disc list-inside">
+                <li>Analyze each year's income to find optimal conversion amounts</li>
+                <li>Convert more in low-income years (like between jobs)</li>
+                <li>Convert less in high-income years</li>
+                <li>Target your specified tax bracket (e.g., 22%)</li>
+              </ul>
+              <p className="text-sm text-blue-700 mt-2">
+                <strong>Example:</strong> If you're between jobs now (lower income) but expect higher income later, 
+                this strategy will recommend larger conversions now and smaller ones later.
+              </p>
+            </div>
+            
             <div>
-              <label className="block text-sm font-medium mb-2">Annual Income</label>
+              <label className="block text-sm font-medium mb-2">Annual Income (Current)</label>
               <input
                 type="number"
                 {...register('annualIncome', { valueAsNumber: true })}
@@ -196,6 +242,52 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
             </div>
             
             <div>
+              <label className="block text-sm font-medium mb-2">Income for Next 10 Years</label>
+              <div className="space-y-3">
+                {Array.from({ length: 10 }, (_, i) => (
+                  <div key={i} className="flex items-center space-x-4">
+                    <div className="w-16">
+                      <label className="block text-sm font-medium text-gray-700">Year {i + 1}</label>
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="number"
+                        {...register(`yearlyIncomes.${i}` as const, { valueAsNumber: true })}
+                        className="w-full p-3 border rounded-md text-base"
+                        placeholder="150,000"
+                        min="0"
+                      />
+                    </div>
+                    <div className="w-32 text-sm text-gray-500">
+                      {formatCurrency(watchedValues.yearlyIncomes?.[i] || 0)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-sm text-gray-500 mt-3">
+                Specify your expected income for each of the next 10 years. This helps optimize conversion timing.
+              </p>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-2">Retirement Income</label>
+              <input
+                type="number"
+                {...register('retirementIncome', { valueAsNumber: true })}
+                className="w-full p-2 border rounded-md"
+                placeholder="80,000"
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                Income after retirement (Social Security, pensions, etc.)
+              </p>
+            </div>
+          </div>
+
+          {/* Income & Conversions */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Income & Conversions</h3>
+            
+            <div>
               <label className="block text-sm font-medium mb-2">Conversion Strategy</label>
               <select {...register('conversionStrategy')} className="w-full p-2 border rounded-md">
                 <option value="one-time">One-time conversion</option>
@@ -203,8 +295,8 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
                 <option value="bracket-optimization">Bracket optimization</option>
               </select>
               <p className="text-sm text-gray-500 mt-1">
-                {conversionStrategy === 'one-time' && 'Convert a fixed amount once'}
-                {conversionStrategy === 'annual' && 'Convert a fixed amount each year'}
+                {conversionStrategy === 'one-time' && 'Convert a specific amount once'}
+                {conversionStrategy === 'annual' && 'Convert a percentage annually'}
                 {conversionStrategy === 'bracket-optimization' && 'Convert to fill target tax bracket'}
               </p>
             </div>
@@ -219,13 +311,13 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
                   placeholder="200,000"
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Amount to convert in the first year only
+                  Amount to convert in year 1: {formatCurrency(watchedValues.annualConversion || 0)}
                 </p>
               </div>
             )}
 
             {conversionStrategy === 'annual' && (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">Annual Conversion Amount</label>
                   <input
@@ -236,19 +328,15 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Conversion Percentage of Traditional Balance
-                  </label>
+                  <label className="block text-sm font-medium mb-2">Conversion Percentage</label>
                   <input
-                    type="range"
+                    type="number"
                     {...register('conversionPercentage', { valueAsNumber: true })}
-                    className="w-full"
-                    min="0"
-                    max="100"
-                    step="1"
+                    className="w-full p-2 border rounded-md"
+                    placeholder="10"
                   />
                   <p className="text-sm text-gray-500 mt-1">
-                    Current: {formatPercentage(watchedValues.conversionPercentage || 0)}
+                    % of Traditional IRA balance
                   </p>
                 </div>
               </div>
@@ -258,6 +346,7 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
               <div>
                 <label className="block text-sm font-medium mb-2">Target Tax Bracket Rate</label>
                 <select {...register('targetTaxBracket', { valueAsNumber: true })} className="w-full p-2 border rounded-md">
+                  <option value={0.10}>10%</option>
                   <option value={0.12}>12%</option>
                   <option value={0.22}>22%</option>
                   <option value={0.24}>24%</option>
@@ -272,90 +361,88 @@ export function Inputs({ onSubmit, defaultValues }: InputsProps) {
             )}
           </div>
 
-          {/* Investment Assumptions (Optional) */}
+          {/* Investment Assumptions */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Investment Assumptions (Optional)</h3>
-            <p className="text-sm text-gray-600 mb-4">
-              Leave blank for basic tax analysis without growth projections
-            </p>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Expected Annual Return</label>
+                <label className="block text-sm font-medium mb-2">Expected Annual Return (%)</label>
                 <input
-                  type="range"
-                  {...register('expectedReturn', { valueAsNumber: true })}
-                  className="w-full"
-                  min="0"
-                  max="0.15"
-                  step="0.001"
+                  type="text"
+                  {...register('expectedReturn')}
+                  className="w-full p-2 border rounded-md"
+                  placeholder="7 (or leave blank)"
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Current: {watchedValues.expectedReturn ? formatPercentage((watchedValues.expectedReturn) * 100) : 'Not set'}
+                  Leave blank for basic analysis without growth projections
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Taxable Account Yield</label>
+                <label className="block text-sm font-medium mb-2">Taxable Yield (%)</label>
                 <input
-                  type="range"
-                  {...register('taxableYield', { valueAsNumber: true })}
-                  className="w-full"
-                  min="0"
-                  max="0.08"
-                  step="0.001"
+                  type="text"
+                  {...register('taxableYield')}
+                  className="w-full p-2 border rounded-md"
+                  placeholder="3 (or leave blank)"
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Current: {watchedValues.taxableYield ? formatPercentage((watchedValues.taxableYield) * 100) : 'Not set'}
+                  Only needed if tracking taxable account for tax payments
                 </p>
               </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Simulation Years</label>
-                <input
-                  type="range"
-                  {...register('simulationYears', { valueAsNumber: true })}
-                  className="w-full"
-                  min="10"
-                  max="50"
-                  step="1"
-                />
-                <p className="text-sm text-gray-500 mt-1">
-                  Current: {watchedValues.simulationYears || 30} years
-                </p>
-              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Simulation Years</label>
+              <input
+                type="number"
+                {...register('simulationYears', { valueAsNumber: true })}
+                className="w-full p-2 border rounded-md"
+                placeholder="30"
+                min="1"
+                max="50"
+              />
+              <p className="text-sm text-gray-500 mt-1">
+                How many years to project forward
+              </p>
             </div>
           </div>
 
           {/* Tax Settings */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Tax Settings</h3>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                {...register('enableStateTax')}
-                className="rounded"
-              />
-              <label className="text-sm font-medium">Include State Tax (NY: 6.85%)</label>
-            </div>
-            {watchedValues.enableStateTax && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium mb-2">State Tax Rate</label>
+                <label className="block text-sm font-medium mb-2">State Tax Rate (%)</label>
                 <input
-                  type="range"
-                  {...register('stateTaxRate', { valueAsNumber: true })}
-                  className="w-full"
+                  type="number"
+                  {...register('stateTaxRate', { 
+                    valueAsNumber: true,
+                    setValueAs: (value) => parseFloat(value) / 100
+                  })}
+                  className="w-full p-2 border rounded-md"
+                  placeholder="6.85"
+                  step="0.01"
                   min="0"
-                  max="0.15"
-                  step="0.001"
+                  max="15"
+                  defaultValue={NY_STATE_TAX_RATE * 100}
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Current: {formatPercentage((watchedValues.stateTaxRate || 0) * 100)}
+                  NY State: 6.85%
                 </p>
               </div>
-            )}
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  {...register('enableStateTax')}
+                  className="rounded"
+                />
+                <label className="text-sm font-medium">Include State Tax</label>
+              </div>
+            </div>
           </div>
 
           <button
             type="submit"
-            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+            className="w-full bg-blue-600 text-white py-3 px-4 rounded-md hover:bg-blue-700 transition-colors"
           >
             Calculate Roth Conversion
           </button>
