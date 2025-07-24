@@ -49,39 +49,72 @@ export function Results({ results, inputs }: ResultsProps) {
               {breakEvenYear ? `Year ${breakEvenYear}` : 'Not reached'}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              When conversion becomes beneficial
+              {breakEvenYear 
+                ? `When your conversion strategy becomes beneficial`
+                : `Your conversion strategy may not be beneficial within ${inputs.simulationYears} years`
+              }
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Total Tax Savings</CardTitle>
+            <CardTitle className="text-lg">Strategy Comparison</CardTitle>
           </CardHeader>
           <CardContent>
             <p className={`text-3xl font-bold ${totalTaxSavings > 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatCurrency(totalTaxSavings)}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              Lifetime benefit of conversion
+              {totalTaxSavings > 0 
+                ? `Better than no conversion strategy`
+                : `Worse than no conversion strategy`
+              }
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Final Wealth</CardTitle>
+            <CardTitle className="text-lg">Final Portfolio Value</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-green-600">
               {formatCurrency(lastResult.totalAfterTaxWealth)}
             </p>
             <p className="text-sm text-gray-500 mt-1">
-              After-tax total at year {lastResult.year}
+              Total after-tax wealth at year {lastResult.year}
             </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Strategy Explanation */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Strategy Analysis</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-semibold mb-2">What These Numbers Mean:</h4>
+              <ul className="text-sm text-gray-600 space-y-2">
+                <li><strong>Break-Even Year:</strong> The year when your conversion strategy (e.g., converting $200k) becomes more beneficial than not converting at all. If "Not reached", it means the conversion strategy doesn't pay off within your simulation period.</li>
+                <li><strong>Strategy Comparison:</strong> The difference between your conversion strategy's final wealth vs. a no-conversion strategy. Positive = conversion strategy wins, Negative = no-conversion strategy wins.</li>
+                <li><strong>Final Portfolio Value:</strong> Your total after-tax wealth at the end of the simulation period using your chosen conversion strategy.</li>
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-semibold mb-2">Key Insight:</h4>
+              <p className="text-sm text-gray-600">
+                This analysis compares your specific conversion strategy (e.g., converting $200k this year) against the alternative of not converting that amount. 
+                It's not comparing "convert everything vs. convert nothing" - it's comparing your chosen strategy against the status quo.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Bracket Optimization Analysis */}
       {bracketAnalysis && (
@@ -360,7 +393,10 @@ export function Results({ results, inputs }: ResultsProps) {
                   <li>• Break-even occurs in year {breakEvenYear}</li>
                 )}
                 {totalTaxSavings > 0 && (
-                  <li>• Lifetime tax savings: {formatCurrency(totalTaxSavings)}</li>
+                  <li>• Your strategy is {formatCurrency(totalTaxSavings)} better than no conversion</li>
+                )}
+                {totalTaxSavings < 0 && (
+                  <li>• Your strategy is {formatCurrency(Math.abs(totalTaxSavings))} worse than no conversion</li>
                 )}
                 <li>• Retirement age: {inputs.retirementAge}</li>
                 <li>• RMDs start at age 72 (if retired)</li>
