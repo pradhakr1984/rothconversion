@@ -3,6 +3,7 @@
 import { SimulationResult } from '../types';
 import { Card, CardContent, CardHeader, CardTitle } from './ui';
 import { findBreakEvenYear, calculateTotalTaxSavings, analyzeBracketOptimization } from '../lib/simulation';
+import { calcMarginalTaxRate, getBrackets } from '../lib/taxEngine';
 
 interface ResultsProps {
   results: SimulationResult[];
@@ -40,403 +41,129 @@ export function Results({ results, inputs }: ResultsProps) {
   const conversionAmount = results[0]?.conversionAmount || 0;
 
   return (
-    <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Break-Even Year</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold text-blue-600">
-              {breakEvenYear ? `Year ${breakEvenYear}` : 'Not reached'}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {breakEvenYear 
-                ? `When converting ${formatCurrency(conversionAmount)} becomes beneficial`
-                : `Converting ${formatCurrency(conversionAmount)} may not be beneficial within ${inputs.simulationYears} years`
-              }
-            </p>
-          </CardContent>
-        </Card>
+    <div className="space-y-8">
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Strategy Comparison</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-3xl font-bold ${totalTaxSavings > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(totalTaxSavings)}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {totalTaxSavings > 0 
-                ? `Better than not converting ${formatCurrency(conversionAmount)}`
-                : `Worse than not converting ${formatCurrency(conversionAmount)}`
-              }
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Strategy Explanation */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Strategy Analysis</CardTitle>
+      {/* Combined Tax & Conversion Analysis */}
+      <Card className="shadow-xl border-0 rounded-3xl">
+        <CardHeader className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-t-3xl">
+          <CardTitle className="text-2xl font-bold flex items-center">
+            <span className="mr-3">🎯</span>
+            Integrated Tax & Conversion Analysis
+          </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <h4 className="font-semibold mb-2">What This Analysis Compares:</h4>
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-blue-800">
-                  <strong>Scenario A:</strong> Convert {formatCurrency(conversionAmount)} now and pay taxes upfront
-                </p>
-                <p className="text-sm text-blue-800 mt-1">
-                  <strong>Scenario B:</strong> Don't convert {formatCurrency(conversionAmount)} and pay taxes later on RMDs
-                </p>
+        <CardContent className="p-8">
+          <div className="space-y-6">
+            {/* Current Year Analysis */}
+            <div className="bg-gradient-to-r from-blue-50 to-purple-50 border border-blue-200 rounded-3xl p-6">
+              <h4 className="font-bold text-blue-800 mb-4 flex items-center text-lg">
+                <span className="mr-3">📊</span>
+                Current Year Analysis
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-blue-700">
+                <div>
+                  <p className="mb-2"><strong>Current Income:</strong> {formatCurrency(inputs.annualIncome)}</p>
+                  <p className="mb-2"><strong>Standard Deduction:</strong> {formatCurrency(inputs.filingStatus === 'mfj' ? 29200 : 14600)}</p>
+                  <p className="mb-2"><strong>Taxable Income:</strong> {formatCurrency(Math.max(0, inputs.annualIncome - (inputs.filingStatus === 'mfj' ? 29200 : 14600)))}</p>
+                  <p className="mb-2"><strong>Current Tax Rate:</strong> {formatPercentage(calcMarginalTaxRate(inputs.annualIncome, getBrackets(inputs.filingStatus), inputs.filingStatus) * 100)}</p>
+                </div>
+                <div>
+                  <p className="mb-2"><strong>Conversion Amount:</strong> {formatCurrency(results[0]?.conversionAmount || 0)}</p>
+                  <p className="mb-2"><strong>Conversion Tax:</strong> {formatCurrency(results[0]?.conversionTax || 0)}</p>
+                  <p className="mb-2"><strong>Effective Tax Rate on Conversion:</strong> {formatPercentage(results[0]?.conversionAmount > 0 ? (results[0]?.conversionTax / results[0]?.conversionAmount) * 100 : 0)}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Combined Tax & Conversion Strategy Summary */}
+            <div className="bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-3xl p-6">
+              <h4 className="font-bold text-purple-800 mb-4 flex items-center text-lg">
+                <span className="mr-3">🎯</span>
+                Tax & Conversion Strategy Summary
+              </h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-purple-700">
+                <div>
+                  <p className="mb-2"><strong>Strategy:</strong> {inputs.conversionStrategy === 'bracket-optimization' ? 'Bracket Optimization' : inputs.conversionStrategy === 'one-time' ? 'One-time Conversion' : 'Annual Conversion'}</p>
+                  {inputs.conversionStrategy === 'bracket-optimization' && (
+                    <p className="mb-2"><strong>Target Bracket:</strong> {formatPercentage((inputs.targetTaxBracket || 0) * 100)}</p>
+                  )}
+                  <p className="mb-2"><strong>Current Tax Rate:</strong> {formatPercentage(calcMarginalTaxRate(inputs.annualIncome, getBrackets(inputs.filingStatus), inputs.filingStatus) * 100)}</p>
+                  {inputs.enableRetirementBracketAnalysis && inputs.retirementTaxBracket && (
+                    <p className="mb-2"><strong>Future Tax Rate:</strong> {formatPercentage((inputs.retirementTaxBracket || 0) * 100)}</p>
+                  )}
+                  <p className="mb-2"><strong>Total Conversions:</strong> {results.filter(r => r.conversionAmount > 0).length} years</p>
+                  <p><strong>Total Tax Paid:</strong> {formatCurrency(results.reduce((sum, r) => sum + r.conversionTax, 0))}</p>
+                </div>
+                <div>
+                  <p className="mb-2"><strong>Break-Even Year:</strong> {breakEvenYear ? `Year ${breakEvenYear}` : 'Not reached'}</p>
+                  <p className="mb-2"><strong>Room in Current Bracket:</strong> {formatCurrency(results[0]?.conversionAmount || 0)}</p>
+                  <p className="mb-2"><strong>Final Traditional Balance:</strong> {formatCurrency(results[results.length - 1]?.traditionalBalance || 0)}</p>
+                  <p><strong>Final Roth Balance:</strong> {formatCurrency(results[results.length - 1]?.rothBalance || 0)}</p>
+                </div>
               </div>
             </div>
             
-            <div>
-              <h4 className="font-semibold mb-2">What These Numbers Mean:</h4>
-              <ul className="text-sm text-gray-600 space-y-2">
-                <li><strong>Break-Even Year:</strong> The year when Scenario A (convert now) becomes more beneficial than Scenario B (don't convert). If "Not reached", it means paying taxes upfront on {formatCurrency(conversionAmount)} doesn't pay off within your simulation period.</li>
-                <li><strong>Strategy Comparison:</strong> The final difference between Scenario A and Scenario B. Positive = converting now wins, Negative = not converting wins.</li>
-              </ul>
-            </div>
-            
-            <div>
-              <h4 className="font-semibold mb-2">Key Factors:</h4>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• <strong>Tax Rate:</strong> Paying {formatPercentage(results[0]?.marginalTaxRate * 100 || 0)} now vs. potentially higher rates later</li>
-                <li>• <strong>Growth:</strong> Tax-free growth in Roth vs. taxable growth in Traditional</li>
-                <li>• <strong>RMDs:</strong> Required distributions starting at age 72 (if retired)</li>
-                <li>• <strong>Time Horizon:</strong> {inputs.simulationYears} years of compound growth</li>
-              </ul>
+            <div className="text-lg text-gray-600 bg-gray-50 p-6 rounded-3xl">
+              <p className="mb-2"><strong>Standard Deduction:</strong> {formatCurrency(inputs.filingStatus === 'mfj' ? 29200 : 14600)} ({inputs.filingStatus === 'mfj' ? 'Married' : 'Single'})</p>
+              <p className="mb-2"><strong>State Tax Rate:</strong> {formatPercentage(inputs.stateTaxRate * 100)}</p>
+              <p><strong>Note:</strong> Tax calculations include standard deductions and state taxes. Married filing jointly provides higher standard deduction, allowing more room for conversions.</p>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Bracket Optimization Analysis */}
-      {bracketAnalysis && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Bracket Optimization Analysis</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className={`p-4 rounded-lg ${bracketAnalysis.shouldConvert ? 'bg-green-50 border border-green-200' : 'bg-yellow-50 border border-yellow-200'}`}>
-                <h4 className="font-semibold mb-2">
-                  {bracketAnalysis.shouldConvert ? '✅ Convert Recommended' : '⚠️ Conversion Not Recommended'}
-                </h4>
-                <p className="text-sm text-gray-700 mb-2">{bracketAnalysis.reasoning}</p>
-                {bracketAnalysis.shouldConvert && (
-                  <p className="text-sm font-medium">
-                    Recommended amount: {formatCurrency(bracketAnalysis.recommendedAmount)}
-                  </p>
-                )}
-              </div>
-              
-              {/* Yearly Recommendations */}
-              {bracketAnalysis.yearlyRecommendations && bracketAnalysis.yearlyRecommendations.length > 0 && (
-                <div>
-                  <h4 className="font-semibold mb-3">Year-by-Year Conversion Plan</h4>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2">Year</th>
-                          <th className="text-right py-2">Income</th>
-                          <th className="text-right py-2">Recommended Conversion</th>
-                          <th className="text-right py-2">Tax Rate</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {bracketAnalysis.yearlyRecommendations.map((rec, index) => (
-                          <tr key={index} className="border-b hover:bg-gray-50">
-                            <td className="py-2">{rec.year}</td>
-                            <td className="text-right py-2">{formatCurrency(rec.income)}</td>
-                            <td className="text-right py-2 font-semibold">{formatCurrency(rec.recommendedAmount)}</td>
-                            <td className="text-right py-2">{formatPercentage(inputs.targetTaxBracket * 100)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-2">
-                    This plan optimizes conversions during your lower-income years to fill the {formatPercentage(inputs.targetTaxBracket * 100)} tax bracket.
-                  </p>
-                </div>
-              )}
-              
-              <div className="text-sm text-gray-600">
-                <p><strong>Current income:</strong> {formatCurrency(inputs.annualIncome)}</p>
-                <p><strong>Target bracket:</strong> {formatPercentage(inputs.targetTaxBracket * 100)}</p>
-                <p><strong>Traditional IRA balance:</strong> {formatCurrency(inputs.traditionalBalance)}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Conversion Details */}
-      {results.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Conversion Details</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="font-semibold mb-2">Year 1 Conversion Breakdown</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Starting Traditional IRA:</span>
-                    <span>{formatCurrency(inputs.traditionalBalance)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Starting Roth IRA:</span>
-                    <span>{formatCurrency(inputs.rothBalance)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Conversion Amount:</span>
-                    <span className="font-semibold">{formatCurrency(results[0].conversionAmount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Conversion Tax:</span>
-                    <span>{formatCurrency(results[0].conversionTax)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>After Conversion Traditional:</span>
-                    <span>{formatCurrency(inputs.traditionalBalance - results[0].conversionAmount)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>After Conversion Roth:</span>
-                    <span>{formatCurrency(inputs.rothBalance + results[0].conversionAmount)}</span>
-                  </div>
-                  {inputs.expectedReturn && (
-                    <>
-                      <div className="flex justify-between">
-                        <span>Growth Rate:</span>
-                        <span>{formatPercentage(inputs.expectedReturn * 100)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>End of Year Traditional:</span>
-                        <span>{formatCurrency(results[0].traditionalBalance)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>End of Year Roth:</span>
-                        <span>{formatCurrency(results[0].rothBalance)}</span>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-2">Tax Impact</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span>Marginal Tax Rate:</span>
-                    <span>{formatPercentage(results[0].marginalTaxRate * 100)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Effective Tax Rate:</span>
-                    <span>{formatPercentage((results[0].conversionTax / results[0].conversionAmount) * 100)}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tax Paid From:</span>
-                    <span>{inputs.taxableBalance !== undefined ? 'Taxable Account' : 'Other Sources'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Account Balances Over Time */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Account Balances Over Time</CardTitle>
+      {/* Conversion Schedule Table */}
+      <Card className="shadow-xl border-0 rounded-3xl">
+        <CardHeader className="bg-gradient-to-r from-green-600 to-blue-600 text-white rounded-t-3xl">
+          <CardTitle className="text-2xl font-bold flex items-center">
+            <span className="mr-3">📋</span>
+            Conversion Schedule
+          </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-8">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-lg">
               <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2">Year</th>
-                  <th className="text-left py-2">Age</th>
-                  <th className="text-right py-2">Traditional IRA</th>
-                  <th className="text-right py-2">Roth IRA</th>
-                  {inputs.taxableBalance !== undefined && (
-                    <th className="text-right py-2">Taxable</th>
-                  )}
-                  <th className="text-right py-2">Total</th>
-                  <th className="text-right py-2">Conversion</th>
-                  <th className="text-right py-2">Tax Rate</th>
-                  <th className="text-center py-2">Status</th>
+                <tr className="border-b-2 border-gray-200">
+                  <th className="text-left py-4 px-6 font-bold text-gray-700">Year</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">Age</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">Conversion</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">Tax Rate</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">Tax Paid</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">Traditional</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">Roth</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">RMD</th>
+                  <th className="text-right py-4 px-6 font-bold text-gray-700">Total Wealth</th>
                 </tr>
               </thead>
               <tbody>
-                {results.slice(0, 10).map((result) => (
-                  <tr key={result.year} className="border-b hover:bg-gray-50">
-                    <td className="py-2">{result.year}</td>
-                    <td className="py-2">{result.age1}</td>
-                    <td className="text-right py-2">{formatCurrency(result.traditionalBalance)}</td>
-                    <td className="text-right py-2">{formatCurrency(result.rothBalance)}</td>
-                    {inputs.taxableBalance !== undefined && (
-                      <td className="text-right py-2">{formatCurrency(Math.max(0, result.taxableBalance || 0))}</td>
-                    )}
-                    <td className="text-right py-2 font-semibold">{formatCurrency(result.totalAfterTaxWealth)}</td>
-                    <td className="text-right py-2">{formatCurrency(result.conversionAmount)}</td>
-                    <td className="text-right py-2">{formatPercentage(result.marginalTaxRate * 100)}</td>
-                    <td className="text-center py-2">
-                      <span className={`px-2 py-1 rounded text-xs ${
-                        result.isRetired ? 'bg-orange-100 text-orange-800' : 'bg-green-100 text-green-800'
-                      }`}>
-                        {result.isRetired ? 'Retired' : 'Working'}
-                      </span>
+                {results.slice(0, 15).map((result, index) => (
+                  <tr key={index} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                    <td className="py-4 px-6 font-bold">{result.year}</td>
+                    <td className="text-right py-4 px-6">{result.age1}</td>
+                    <td className="text-right py-4 px-6 font-bold text-green-600">
+                      {result.conversionAmount > 0 ? formatCurrency(result.conversionAmount) : '-'}
                     </td>
+                    <td className="text-right py-4 px-6">{formatPercentage(result.marginalTaxRate * 100)}</td>
+                    <td className="text-right py-4 px-6">
+                      {result.conversionTax > 0 ? formatCurrency(result.conversionTax) : '-'}
+                    </td>
+                    <td className="text-right py-4 px-6">{formatCurrency(result.traditionalBalance)}</td>
+                    <td className="text-right py-4 px-6">{formatCurrency(result.rothBalance)}</td>
+                    <td className="text-right py-4 px-6">
+                      {result.rmdAmount > 0 ? formatCurrency(result.rmdAmount) : '-'}
+                    </td>
+                    <td className="text-right py-4 px-6 font-bold">{formatCurrency(result.totalAfterTaxWealth)}</td>
                   </tr>
                 ))}
-                {results.length > 10 && (
-                  <tr className="text-gray-500">
-                    <td colSpan={inputs.taxableBalance !== undefined ? 9 : 8} className="text-center py-2">
-                      ... and {results.length - 10} more years
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* RMD Analysis */}
-      {results.some(r => r.rmdAmount > 0) && (
-        <Card>
-          <CardHeader>
-            <CardTitle>RMD Analysis (After Retirement)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2">Year</th>
-                    <th className="text-left py-2">Age</th>
-                    <th className="text-right py-2">RMD Amount</th>
-                    <th className="text-right py-2">RMD Tax</th>
-                    <th className="text-right py-2">Traditional Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.filter(r => r.rmdAmount > 0).slice(0, 10).map((result) => (
-                    <tr key={result.year} className="border-b hover:bg-gray-50">
-                      <td className="py-2">{result.year}</td>
-                      <td className="py-2">{result.age1}</td>
-                      <td className="text-right py-2">{formatCurrency(result.rmdAmount)}</td>
-                      <td className="text-right py-2">{formatCurrency(result.rmdTax)}</td>
-                      <td className="text-right py-2">{formatCurrency(result.traditionalBalance)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          
+          {results.length > 15 && (
+            <div className="text-center text-lg text-gray-500 mt-6">
+              Showing first 15 years of {results.length} total years
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Tax Analysis */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Tax Analysis</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <h4 className="font-semibold mb-2">Conversion Tax Summary</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Total Conversion Amount:</span>
-                  <span>{formatCurrency(results.reduce((sum, r) => sum + r.conversionAmount, 0))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total Conversion Tax:</span>
-                  <span>{formatCurrency(results.reduce((sum, r) => sum + r.conversionTax, 0))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Average Tax Rate:</span>
-                  <span>{formatPercentage(
-                    (results.reduce((sum, r) => sum + r.conversionTax, 0) / 
-                     results.reduce((sum, r) => sum + r.conversionAmount, 0)) * 100
-                  )}</span>
-                </div>
-              </div>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2">RMD Tax Summary</h4>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span>Total RMD Amount:</span>
-                  <span>{formatCurrency(results.reduce((sum, r) => sum + r.rmdAmount, 0))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Total RMD Tax:</span>
-                  <span>{formatCurrency(results.reduce((sum, r) => sum + r.rmdTax, 0))}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>RMD Tax Rate:</span>
-                  <span>{formatPercentage(
-                    (results.reduce((sum, r) => sum + r.rmdTax, 0) / 
-                     results.reduce((sum, r) => sum + r.rmdAmount, 0)) * 100
-                  )}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Strategy Summary */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Strategy Summary</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div>
-              <h4 className="font-semibold mb-2">Conversion Strategy</h4>
-              <p className="text-sm text-gray-600">
-                {inputs.conversionStrategy === 'one-time' && 
-                  `One-time conversion of ${formatCurrency(inputs.annualConversion)} in year 1`
-                }
-                {inputs.conversionStrategy === 'annual' && 
-                  `Annual conversions of ${formatCurrency(inputs.annualConversion)} (${inputs.conversionPercentage}% of balance)`
-                }
-                {inputs.conversionStrategy === 'bracket-optimization' && 
-                  `Convert to fill ${formatPercentage(inputs.targetTaxBracket * 100)} tax bracket`
-                }
-              </p>
-            </div>
-            <div>
-              <h4 className="font-semibold mb-2">Key Insights</h4>
-              <ul className="text-sm text-gray-600 space-y-1">
-                {breakEvenYear && (
-                  <li>• Break-even occurs in year {breakEvenYear}</li>
-                )}
-                {totalTaxSavings > 0 && (
-                  <li>• Converting {formatCurrency(conversionAmount)} now is {formatCurrency(totalTaxSavings)} better than not converting</li>
-                )}
-                {totalTaxSavings < 0 && (
-                  <li>• Converting {formatCurrency(conversionAmount)} now is {formatCurrency(Math.abs(totalTaxSavings))} worse than not converting</li>
-                )}
-                <li>• Retirement age: {inputs.retirementAge}</li>
-                <li>• RMDs start at age 72 (if retired)</li>
-              </ul>
-            </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>

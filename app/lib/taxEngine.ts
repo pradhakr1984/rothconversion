@@ -25,8 +25,18 @@ export const SINGLE_BRACKETS: TaxBracket[] = [
 // New York State Tax Rate (2024-2025)
 export const NY_STATE_TAX_RATE = 0.0685; // 6.85% for most income levels
 
+// 2025 Standard Deductions
+export const STANDARD_DEDUCTIONS = {
+  single: 14600,
+  mfj: 29200
+};
+
 export function getBrackets(filingStatus: 'single' | 'mfj'): TaxBracket[] {
   return filingStatus === 'single' ? SINGLE_BRACKETS : MFJ_BRACKETS;
+}
+
+export function getStandardDeduction(filingStatus: 'single' | 'mfj'): number {
+  return STANDARD_DEDUCTIONS[filingStatus];
 }
 
 export function calcMarginalTax(income: number, brackets: TaxBracket[]): number {
@@ -45,17 +55,23 @@ export function calcMarginalTax(income: number, brackets: TaxBracket[]): number 
   return tax;
 }
 
-export function calcMarginalTaxRate(income: number, brackets: TaxBracket[]): number {
+export function calcMarginalTaxRate(income: number, brackets: TaxBracket[], filingStatus: 'single' | 'mfj' = 'single'): number {
+  const standardDeduction = getStandardDeduction(filingStatus);
+  const taxableIncome = Math.max(0, income - standardDeduction);
+  
   for (const bracket of brackets) {
-    if (bracket.cap === null || income <= bracket.cap) {
+    if (bracket.cap === null || taxableIncome <= bracket.cap) {
       return bracket.rate;
     }
   }
   return brackets[brackets.length - 1].rate;
 }
 
-export function calcTotalTax(income: number, brackets: TaxBracket[], stateTaxRate: number = 0): number {
-  const federalTax = calcMarginalTax(income, brackets);
+export function calcTotalTax(income: number, brackets: TaxBracket[], stateTaxRate: number = 0, filingStatus: 'single' | 'mfj' = 'single'): number {
+  const standardDeduction = getStandardDeduction(filingStatus);
+  const taxableIncome = Math.max(0, income - standardDeduction);
+  
+  const federalTax = calcMarginalTax(taxableIncome, brackets);
   const stateTax = income * stateTaxRate;
   return federalTax + stateTax;
 }
@@ -70,20 +86,24 @@ export function getOptimalConversionAmount(
   currentIncome: number,
   traditionalBalance: number,
   brackets: TaxBracket[],
-  targetBracket: number
+  targetBracket: number,
+  filingStatus: 'single' | 'mfj' = 'mfj'
 ): number {
-  const currentBracket = calcMarginalTaxRate(currentIncome, brackets);
+  const standardDeduction = getStandardDeduction(filingStatus);
+  const currentBracket = calcMarginalTaxRate(currentIncome, brackets, filingStatus);
   
   // If we're already at or below the target bracket, convert to fill the target bracket
   if (currentBracket <= targetBracket) {
     // Find the target bracket threshold
-    for (const bracket of brackets) {
+    for (let i = 0; i < brackets.length; i++) {
+      const bracket = brackets[i];
       if (bracket.rate === targetBracket && bracket.cap) {
-        const roomInBracket = bracket.cap - currentIncome;
+        // Account for standard deduction when calculating room in bracket
+        const roomInBracket = bracket.cap + standardDeduction - currentIncome;
         return Math.min(roomInBracket, traditionalBalance);
       }
     }
-    // If target bracket is not found or has no cap, convert a reasonable amount
+    // If target bracket not found, convert a reasonable amount
     return Math.min(traditionalBalance * 0.1, 50000); // 10% or $50k, whichever is less
   }
   
@@ -93,10 +113,10 @@ export function getOptimalConversionAmount(
   
   for (const bracket of brackets) {
     if (bracket.rate <= targetBracket && bracket.cap) {
-      const roomInBracket = bracket.cap - testIncome;
+      const roomInBracket = bracket.cap + standardDeduction - testIncome;
       if (roomInBracket > 0) {
         conversionAmount += roomInBracket;
-        testIncome = bracket.cap;
+        testIncome = bracket.cap + standardDeduction;
       }
     }
   }

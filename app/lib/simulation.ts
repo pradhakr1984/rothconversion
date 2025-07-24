@@ -1,5 +1,5 @@
 import { UserInputs, SimulationResult } from '../types';
-import { getBrackets, calcMarginalTaxRate, calcTotalTax, getOptimalConversionAmount } from './taxEngine';
+import { getBrackets, calcMarginalTaxRate, calcTotalTax, getOptimalConversionAmount, getStandardDeduction } from './taxEngine';
 import { getRmd } from './rmd';
 
 export function runSimulation(inputs: UserInputs): SimulationResult[] {
@@ -41,29 +41,34 @@ export function runSimulation(inputs: UserInputs): SimulationResult[] {
     let conversionAmount = 0;
     
     if (inputs.conversionStrategy === 'one-time' && !oneTimeConversionDone) {
-      conversionAmount = Math.min(inputs.annualConversion, traditionalBalance);
-      oneTimeConversionDone = true;
+      // One-time conversion: convert specific dollar amount once
+      if (inputs.oneTimeConversionAmount) {
+        conversionAmount = Math.min(inputs.oneTimeConversionAmount, traditionalBalance);
+        oneTimeConversionDone = true;
+      }
     } else if (inputs.conversionStrategy === 'annual') {
-      conversionAmount = Math.min(
-        inputs.annualConversion,
-        traditionalBalance * (inputs.conversionPercentage / 100)
-      );
+      // Annual conversion: convert specific dollar amount each year
+      if (inputs.annualConversionAmount) {
+        conversionAmount = Math.min(inputs.annualConversionAmount, traditionalBalance);
+      }
     } else if (inputs.conversionStrategy === 'bracket-optimization') {
-      // Only convert if not retired and we have room in target bracket
-      if (!isRetired) {
+      // Bracket optimization: convert to fill target tax bracket
+      if (inputs.targetTaxBracket && !isRetired) {
         conversionAmount = getOptimalConversionAmount(
           currentYearIncome,
           traditionalBalance,
           brackets,
-          inputs.targetTaxBracket
+          inputs.targetTaxBracket,
+          inputs.filingStatus
         );
       }
     }
     
     // Calculate tax on conversion
     const taxableIncome = currentYearIncome + conversionAmount;
-    const marginalTaxRate = calcMarginalTaxRate(taxableIncome, brackets);
-    const conversionTax = calcTotalTax(conversionAmount, brackets, inputs.enableStateTax ? inputs.stateTaxRate : 0);
+    const currentTaxRate = calcMarginalTaxRate(currentYearIncome, brackets, inputs.filingStatus);
+    const marginalTaxRate = calcMarginalTaxRate(taxableIncome, brackets, inputs.filingStatus);
+    const conversionTax = calcTotalTax(conversionAmount, brackets, inputs.enableStateTax ? inputs.stateTaxRate : 0, inputs.filingStatus);
     
     // Apply conversion
     traditionalBalance -= conversionAmount;
@@ -263,12 +268,34 @@ export function analyzeTaxBrackets(
   filingStatus: 'single' | 'mfj'
 ): Array<{ bracket: number; rate: number; maxIncome: number; roomInBracket: number; suggestedConversion: number }> {
   const brackets = getBrackets(filingStatus);
+  const standardDeduction = getStandardDeduction(filingStatus);
+  const taxableIncome = Math.max(0, currentIncome - standardDeduction);
   const analysis = [];
+  
+  // Find current bracket
+  let currentBracketIndex = 0;
+  for (let i = 0; i < brackets.length; i++) {
+    const bracket = brackets[i];
+    if (bracket.cap === null || taxableIncome <= bracket.cap) {
+      currentBracketIndex = i;
+      break;
+    }
+  }
   
   for (let i = 0; i < brackets.length; i++) {
     const bracket = brackets[i];
     const maxIncome = bracket.cap || Infinity;
-    const roomInBracket = Math.max(0, maxIncome - currentIncome);
+    
+    // Calculate room in this bracket
+    let roomInBracket = 0;
+    if (maxIncome === Infinity) {
+      // For the top bracket, room is unlimited
+      roomInBracket = traditionalBalance;
+    } else {
+      // For other brackets, room is from current income to bracket cap
+      roomInBracket = Math.max(0, maxIncome - taxableIncome);
+    }
+    
     const suggestedConversion = Math.min(roomInBracket, traditionalBalance);
     
     analysis.push({
@@ -279,6 +306,13 @@ export function analyzeTaxBrackets(
       suggestedConversion
     });
   }
+  
+  // Sort by current bracket first, then by rate
+  analysis.sort((a, b) => {
+    if (a.rate === brackets[currentBracketIndex].rate) return -1;
+    if (b.rate === brackets[currentBracketIndex].rate) return 1;
+    return a.rate - b.rate;
+  });
   
   return analysis;
 } 

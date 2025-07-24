@@ -16,15 +16,27 @@ export interface UserInputs {
   // Multi-year income support
   yearlyIncomes: number[]; // Array of 10 years of income
   retirementIncome: number; // Income after retirement
+  
+  // Conversion strategy - only one should be active
   conversionStrategy: 'one-time' | 'annual' | 'bracket-optimization';
-  annualConversion: number;
+  
+  // Strategy-specific parameters
+  oneTimeConversionAmount?: number; // For one-time strategy only
+  annualConversionAmount?: number; // For annual strategy only
+  targetTaxBracket?: number; // For bracket-optimization strategy only
+  
+  // Legacy field for backward compatibility - will be removed
   conversionPercentage: number;
-  targetTaxBracket: number;
+  
   expectedReturn?: number | string; // Can be string from form, transformed to number
   taxableYield?: number | string; // Can be string from form, transformed to number
   simulationYears: number;
   stateTaxRate: number; // Stored as percentage (e.g., 6.85 for 6.85%)
   enableStateTax: boolean;
+  
+  // Tax rate analysis
+  enableRetirementBracketAnalysis: boolean;
+  retirementTaxBracket?: number; // Expected future tax rate (e.g., 0.22 for 22%)
 }
 
 export interface SimulationResult {
