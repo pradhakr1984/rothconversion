@@ -37,7 +37,7 @@ export function TaxTable({ filingStatus }: TaxTableProps) {
             </thead>
             <tbody>
               {brackets.map((bracket, index) => {
-                const previousCap = index > 0 ? brackets[index - 1].cap : 0;
+                const previousCap = index > 0 ? (brackets[index - 1].cap ?? 0) : 0;
                 const bracketWidth = bracket.cap ? bracket.cap - previousCap : null;
                 
                 return (
