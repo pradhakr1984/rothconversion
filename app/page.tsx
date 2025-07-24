@@ -42,10 +42,7 @@ export default function Home() {
                 </p>
               </div>
             </div>
-            <div className="hidden sm:flex items-center space-x-2 text-xs text-gray-500">
-              <span className="px-2 py-1 bg-gray-100 rounded-md font-mono">Next.js</span>
-              <span className="px-2 py-1 bg-gray-100 rounded-md font-mono">TypeScript</span>
-            </div>
+
           </div>
         </div>
       </header>
